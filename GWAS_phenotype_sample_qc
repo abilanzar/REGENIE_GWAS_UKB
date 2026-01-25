@@ -1,0 +1,88 @@
+import pyspark.pandas as ks
+import dxpy
+import dxdata
+import pandas as pd
+import pyspark
+import re
+
+# Initialize Spark (run once)
+sc = pyspark.SparkContext.getOrCreate()
+spark = pyspark.sql.SparkSession(sc)
+
+dispensed_dataset = dxpy.find_one_data_object(
+    typename="Dataset",
+    name="app*.dataset",
+    folder="/",
+    name_mode="glob"
+)
+
+dispensed_dataset_id = dispensed_dataset["id"]
+dataset = dxdata.load_dataset(id=dispensed_dataset_id)
+
+participant = dataset["participant"]
+
+participant
+
+field_ids = ['31', '22001', '22006', '22019', '22021', '21022']
+
+
+case = dxdata.load_cohort("YT_HA", folder="/Data")
+cont = dxdata.load_cohort("Not in YT_HA", folder="/Data")
+
+def fields_for_id(field_id):
+    from distutils.version import LooseVersion
+    field_id = str(field_id)
+    fields = participant.find_fields(
+        name_regex=r'^p{}(_i\d+)?(_a\d+)?$'.format(field_id)
+    )
+    return sorted(fields, key=lambda f: LooseVersion(f.name))
+fields = [fields_for_id(f)[0] for f in field_ids] + [
+    participant.find_field(name='eid')
+]
+
+case_df = participant.retrieve_fields(
+    fields=fields,
+    filter_sql=case.sql,
+    engine=dxdata.connect()
+).to_koalas()
+
+cont_df = participant.retrieve_fields(
+    fields=fields,
+    filter_sql=cont.sql,
+    engine=dxdata.connect(
+        dialect="hive+pyspark",
+        connect_args={
+            "config": {
+                "spark.kryoserializer.buffer.max": "256m",
+                "spark.sql.autoBroadcastJoinThreshold": "-1"
+            }
+        }
+    )
+).to_koalas()
+
+case_df['ha_cc'] = 1
+cont_df['ha_cc'] = 0
+
+df = ks.concat([case_df, cont_df])
+df.shape
+
+df_qced = df_qced.rename(columns={
+    'eid': 'IID',
+    'p31': 'sex',
+    'p21022': 'age'
+})
+
+df_qced['FID'] = df_qced['IID']
+
+df_phenotype = df_qced[['FID', 'IID', 'ha_cc', 'sex', 'age']].to_pandas()
+
+out_path_local = "/mnt/data/HA_EUR_YT.phen.tsv"
+df_phenotype.to_csv(out_path_local, sep="\t", index=False, na_rep="NA")
+print("Saved locally:", out_path_local)
+
+
+%%bash
+dx upload /home/dnanexus/HA_EUR_full.phen.tsv --path /Data --brief
+
+
+
