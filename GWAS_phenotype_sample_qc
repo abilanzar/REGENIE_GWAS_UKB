@@ -96,3 +96,22 @@ print("Saved locally:", out_path_local)
 !dx upload "/home/dnanexus/HA_YT.phen.tsv" --destination "/Data/HA_YT.phen.tsv" --brief
 !dx find data --name "HA_YT.phen.tsv" --path "/" --brief
 !dx ls "/Data"
+
+
+
+import pandas as pd
+
+df = pd.read_csv("/home/dnanexus/HA_YT.phen.tsv", sep="\t")
+
+cases = df[df.ha_cc == 1]
+controls = df[df.ha_cc == 0].sample(n=10 * len(cases), random_state=42)
+
+df_ds = pd.concat([cases, controls])
+df_ds.ha_cc.value_counts()
+
+df_ds.to_csv("/home/dnanexus/HA_YT_1to10.phen.tsv", sep="\t", index=False)
+
+!dx upload "/home/dnanexus/HA_YT_1to10.phen.tsv" --destination "/Data/HA_YT_1to10.phen.tsv" --brief
+!dx find data --name "HA_YT_1to10.phen.tsv" --path "/" --brief
+!dx ls "/Data"
+
