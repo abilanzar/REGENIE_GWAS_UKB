@@ -4,17 +4,15 @@ set -euo pipefail
 # -----------------------
 # USER SETTINGS
 # -----------------------
-PHENO_NAME="HA_YT_1to10.phen.tsv"
+PHENO_FILE_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"   # your phenotype file ID
 OUT_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
 
-# UKB RAP bulk array genotype calls path
 BULK_GENO_DIR="/mnt/project/Bulk/Genotype Results/Genotype calls"
-
-# Instance type
 INSTANCE_TYPE="mem1_ssd1_v2_x16"
 
-# REAL DNAnexus file ID for phenotype file
-INPUT_FILE_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"
+# swiss-army-knife still requires at least one -iin input
+# we can use the same phenotype file id as the dummy input
+INPUT_FILE_ID="${PHENO_FILE_ID}"
 
 # -----------------------
 # COMMAND THAT RUNS IN THE JOB CONTAINER
@@ -23,11 +21,12 @@ run_merge=$(cat <<'EOF'
 set -euo pipefail
 
 echo "Working dir: $(pwd)"
-echo "Listing /mnt/in:"
-ls -lh /mnt/in || true
+echo "DX whoami (sanity):"
+dx whoami || true
 
-# 1) Copy staged phenotype input into working directory
-cp /mnt/in/* ./pheno.tsv
+# 1) Fetch phenotype directly by file-id (most robust)
+echo "Downloading phenotype via dx cat..."
+dx cat "${PHENO_FILE_ID}" > pheno.tsv
 
 echo "Phenotype header:"
 head -n 1 pheno.tsv
@@ -43,10 +42,10 @@ awk -F'\t' 'NR==1{
 }
 { print $h["FID"], $h["IID"] }' pheno.tsv > keep.ids
 
-echo "Keep IDs (first 5):"
-head -n 5 keep.ids
 echo "Keep IDs count:"
 wc -l keep.ids
+echo "Keep IDs (first 5):"
+head -n 5 keep.ids
 
 # 3) Copy chr1-22 bed/bim/fam into working directory
 for c in $(seq 1 22); do
@@ -70,7 +69,7 @@ echo "Head (base dataset): $head_prefix"
 echo "Merge list lines:"
 wc -l merge_list.txt
 
-# 5) Merge + keep only IDs
+# 5) Merge + keep only your IDs
 plink \
   --bfile "$head_prefix" \
   --merge-list merge_list.txt \
@@ -84,8 +83,8 @@ ls -lh ukb22418_c1_22_v2_merged_HA_DS.*
 EOF
 )
 
-# Export BULK_GENO_DIR into job environment (because EOF block is single-quoted)
-run_merge="export BULK_GENO_DIR=\"${BULK_GENO_DIR}\"; ${run_merge}"
+# Export variables into job env (EOF is single-quoted)
+run_merge="export BULK_GENO_DIR=\"${BULK_GENO_DIR}\"; export PHENO_FILE_ID=\"${PHENO_FILE_ID}\"; ${run_merge}"
 
 # -----------------------
 # LAUNCH
@@ -97,6 +96,7 @@ dx run swiss-army-knife \
   --instance-type "${INSTANCE_TYPE}" \
   --destination="/Data/" \
   --brief --yes
+
 
 
 #Verify
