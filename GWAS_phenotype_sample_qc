@@ -63,8 +63,16 @@ cont_df = participant.retrieve_fields(
 case_df['ha_cc'] = 1
 cont_df['ha_cc'] = 0
 
+
 df = ks.concat([case_df, cont_df])
 df.shape
+
+df.ha_cc.value_counts()
+
+df_qced = df[
+    (df['p31'] == df['p22001']) &
+    (df['p22019'].isnull())
+]
 
 df_qced = df_qced.rename(columns={
     'eid': 'IID',
@@ -74,15 +82,17 @@ df_qced = df_qced.rename(columns={
 
 df_qced['FID'] = df_qced['IID']
 
-df_phenotype = df_qced[['FID', 'IID', 'ha_cc', 'sex', 'age']].to_pandas()
+df_qced.ha_cc.value_counts()
+#0 458828
+#1 180
 
-out_path_local = "/mnt/data/HA_EUR_YT.phen.tsv"
+df_phenotype = df_qced[['FID', 'IID', 'ha_cc', 'sex', 'age']].to_pandas()
+df_phenotype.head()
+
+out_path_local = "/home/dnanexus/HA_YT.phen.tsv"
 df_phenotype.to_csv(out_path_local, sep="\t", index=False, na_rep="NA")
 print("Saved locally:", out_path_local)
 
-
-%%bash
-dx upload /home/dnanexus/HA_EUR_full.phen.tsv --path /Data --brief
-
-
-
+!dx upload "/home/dnanexus/HA_YT.phen.tsv" --destination "/Data/HA_YT.phen.tsv" --brief
+!dx find data --name "HA_YT.phen.tsv" --path "/" --brief
+!dx ls "/Data"
