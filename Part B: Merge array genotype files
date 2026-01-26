@@ -1,1 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
 
+# -----------------------
+# USER SETTINGS
+# -----------------------
+PHENO_NAME="HA_YT_1to10.phen.tsv"
+OUT_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
+
+# UKB RAP bulk array genotype calls path
+BULK_GENO_DIR="/mnt/project/Bulk/Genotype Results/Genotype calls"
+
+# Instance type
+INSTANCE_TYPE="mem1_ssd1_v2_x16"
+
+# REAL DNAnexus file ID for phenotype file
+INPUT_FILE_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"
+
+# -----------------------
+# COMMAND THAT RUNS IN THE JOB CONTAINER
+# -----------------------
+run_merge=$(cat <<'EOF'
+set -euo pipefail
+
+echo "Working dir: $(pwd)"
+echo "Listing /mnt/in:"
+ls -lh /mnt/in || true
+
+# 1) Copy staged phenotype input into working directory
+cp /mnt/in/* ./pheno.tsv
+
+echo "Phenotype header:"
+head -n 1 pheno.tsv
+
+# 2) Build keep file (FID IID) from phenotype
+awk -F'\t' 'NR==1{
+  for(i=1;i<=NF;i++){h[$i]=i}
+  if(!("FID" in h) || !("IID" in h)){
+    print "ERROR: pheno must contain FID and IID columns" > "/dev/stderr"
+    exit 1
+  }
+  next
+}
+{ print $h["FID"], $h["IID"] }' pheno.tsv > keep.ids
+
+echo "Keep IDs (first 5):"
+head -n 5 keep.ids
+echo "Keep IDs count:"
+wc -l keep.ids
+
+# 3) Copy chr1-22 bed/bim/fam into working directory
+for c in $(seq 1 22); do
+  base="ukb22418_c${c}_b0_v2"
+  for ext in bed bim fam; do
+    src="${BULK_GENO_DIR}/${base}.${ext}"
+    if [ ! -f "$src" ]; then
+      echo "ERROR: missing $src" >&2
+      exit 1
+    fi
+    cp "$src" .
+  done
+done
+
+# 4) Build merge list
+ls ukb22418_c*_b0_v2.bed | sed 's/\.bed$//' | sort -V > all_prefixes.txt
+head_prefix=$(head -n 1 all_prefixes.txt)
+tail -n +2 all_prefixes.txt > merge_list.txt
+
+echo "Head (base dataset): $head_prefix"
+echo "Merge list lines:"
+wc -l merge_list.txt
+
+# 5) Merge + keep only IDs
+plink \
+  --bfile "$head_prefix" \
+  --merge-list merge_list.txt \
+  --keep keep.ids \
+  --make-bed \
+  --autosome-xy \
+  --out ukb22418_c1_22_v2_merged_HA_DS
+
+echo "Outputs:"
+ls -lh ukb22418_c1_22_v2_merged_HA_DS.*
+EOF
+)
+
+# Export BULK_GENO_DIR into job environment (because EOF block is single-quoted)
+run_merge="export BULK_GENO_DIR=\"${BULK_GENO_DIR}\"; ${run_merge}"
+
+# -----------------------
+# LAUNCH
+# -----------------------
+dx run swiss-army-knife \
+  -iin="${INPUT_FILE_ID}" \
+  -icmd="${run_merge}" \
+  --tag="HA_merge_array_keep_DS" \
+  --instance-type "${INSTANCE_TYPE}" \
+  --destination="/Data/" \
+  --brief --yes
+
+
+#Verify
+dx ls -l /Data/ukb22418_c1_22_v2_merged_HA_DS.fam
+dx cat /Data/ukb22418_c1_22_v2_merged_HA_DS.fam | wc -l
