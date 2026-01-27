@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------
-# INPUT FILE IDS (yours)
+# YOUR INPUT FILE IDS
 # -----------------------
 BED_ID="file-J5qzk58JgX6p2BF63PV8b7Pb"
 BIM_ID="file-J5qzk5jJgX6f5KbZ2X1KPg3Z"
@@ -20,35 +20,18 @@ MERGED_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
 OUT_PREFIX="HA_DS_step1_qc_pass"
 
 echo "Working dir: $(pwd)"
+dx whoami || true
+dx pwd || true
 
-echo "Mounted inputs (files only):"
-find /home/dnanexus/in -type f -maxdepth 6 -print || true
-
-# Copy inputs to expected filenames
-BED_SRC=$(find /home/dnanexus/in -type f -name "*.bed" | head -n 1 || true)
-BIM_SRC=$(find /home/dnanexus/in -type f -name "*.bim" | head -n 1 || true)
-FAM_SRC=$(find /home/dnanexus/in -type f -name "*.fam" | head -n 1 || true)
-
-if [ -z "$BED_SRC" ] || [ -z "$BIM_SRC" ] || [ -z "$FAM_SRC" ]; then
-  echo "ERROR: Could not locate .bed/.bim/.fam among mounted inputs" >&2
-  echo "Debug tree (depth 10):"
-  find /home/dnanexus/in -maxdepth 10 -print || true
-  exit 1
-fi
-
-echo "Using sources:"
-echo "  BED: $BED_SRC"
-echo "  BIM: $BIM_SRC"
-echo "  FAM: $FAM_SRC"
-
-cp "$BED_SRC" "${MERGED_PREFIX}.bed"
-cp "$BIM_SRC" "${MERGED_PREFIX}.bim"
-cp "$FAM_SRC" "${MERGED_PREFIX}.fam"
+echo "Downloading BED/BIM/FAM by file IDs (overwrite if exists)..."
+dx download "${BED_ID}" -o "${MERGED_PREFIX}.bed" --overwrite
+dx download "${BIM_ID}" -o "${MERGED_PREFIX}.bim" --overwrite
+dx download "${FAM_ID}" -o "${MERGED_PREFIX}.fam" --overwrite
 
 echo "Local merged trio:"
 ls -lh ${MERGED_PREFIX}.{bed,bim,fam}
 
-echo "Running PLINK2 QC filter -> write snplist + samples"
+echo "Running PLINK2 QC filter (write snplist + samples)..."
 plink2 \
   --bfile ${MERGED_PREFIX} \
   --autosome \
@@ -71,13 +54,15 @@ wc -l ${OUT_PREFIX}.id || true
 EOF
 )
 
+# inject IDs into the single-quoted EOF block
+run_qc="export BED_ID='${BED_ID}'; export BIM_ID='${BIM_ID}'; export FAM_ID='${FAM_ID}'; ${run_qc}"
+
 dx run swiss-army-knife \
   -iin="${BED_ID}" \
-  -iin="${BIM_ID}" \
-  -iin="${FAM_ID}" \
   -icmd="${run_qc}" \
   --tag="PartC_step1_qc_filter" \
   --instance-type "${INSTANCE_TYPE}" \
   --destination="${DEST}" \
   --brief --yes
+
 
