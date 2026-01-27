@@ -4,7 +4,10 @@ set -euo pipefail
 # -----------------------
 # USER SETTINGS
 # -----------------------
-PHENO_FILE_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"   # your phenotype file ID
+PHENO_FILE_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"   # phenotype file ID
+# dx find data --name "HA_YT_1to20.phen.tsv" --path "/Data" --brief
+# project-GzqK6vjJB65kj0Kz88KJPFzv:
+#PHENO_FILE_ID="file-J5vYGq8JB65gqpxzkz9q9522"  
 OUT_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
 
 BULK_GENO_DIR="/mnt/project/Bulk/Genotype Results/Genotype calls"
