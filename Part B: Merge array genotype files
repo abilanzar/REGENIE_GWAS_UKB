@@ -87,7 +87,7 @@ EOF
 run_merge="export BULK_GENO_DIR=\"${BULK_GENO_DIR}\"; export PHENO_FILE_ID=\"${PHENO_FILE_ID}\"; ${run_merge}"
 
 # -----------------------
-# LAUNCH
+# LAUNCH ~43min
 # -----------------------
 dx run swiss-army-knife \
   -iin="${INPUT_FILE_ID}" \
