@@ -1,0 +1,46 @@
+PHENO_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"
+
+run_make_covar=$(cat <<'EOF'
+set -euo pipefail
+
+echo "Working dir: $(pwd)"
+dx whoami || true
+dx pwd || true
+
+echo "Download inputs..."
+dx download "${PHENO_ID}" -o pheno.tsv --overwrite
+dx download "${COVAR_FULL_ID}" -o covar_full.tsv --overwrite
+
+echo "Headers:"
+head -n 1 pheno.tsv
+head -n 1 covar_full.tsv
+
+# Filter full covar to only IDs in pheno (FID IID)
+awk -F'\t' '
+NR==FNR {
+  if (FNR==1) next;
+  keep[$1 FS $2]=1;
+  next
+}
+FNR==1 { print; next }
+{
+  if (($1 FS $2) in keep) print
+}
+' pheno.tsv covar_full.tsv > HA_YT_1to10.covar.tsv
+
+echo "Wrote: HA_YT_1to10.covar.tsv"
+echo "Row count (excluding header):"
+tail -n +2 HA_YT_1to10.covar.tsv | wc -l
+
+echo "Preview:"
+head -n 3 HA_YT_1to10.covar.tsv
+EOF
+)
+
+dx run swiss-army-knife \
+  -iin="${PHENO_ID}" \
+  -icmd="export PHENO_ID='${PHENO_ID}'; export COVAR_FULL_ID='${COVAR_FULL_ID}'; ${run_make_covar}" \
+  --tag="Make_HA_YT_1to10_covar" \
+  --instance-type "mem1_ssd1_v2_x16" \
+  --destination="/Data/phenotypes/" \
+  --brief --yes
