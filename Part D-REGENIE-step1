@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =========================
+# Part D (REGENIE Step 1) with PCs
+# =========================
+
+# ---- genotype merged bed/bim/fam file IDs ----
+BED_ID="file-J5qzk58JgX6p2BF63PV8b7Pb"
+BIM_ID="file-J5qzk5jJgX6f5KbZ2X1KPg3Z"
+FAM_ID="file-J5qzk5QJgX6kqkY2fqQy1xYZ"
+
+# ---- phenotype + covariate + QC-list file IDs ----
+PHENO_ID="file-J5qxX2jJB65jpb7K5ZJXkbVz"             # HA_YT_1to10.phen.tsv
+COVAR_ID="file-J5v52jQJV65Qyj9bgzPkFjbX"             # HA_YT_1to10.covar.tsv
+KEEP_ID_FILE="file-J5v0fp0Jj3f63758pFYby8Xb"          # HA_DS_step1_qc_pass.id
+SNPLIST_FILE="file-J5v0fp0Jj3f6jKFxZXGf0JJ4"          # HA_DS_step1_qc_pass.snplist
+
+# ---- names/paths ----
+G_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
+STEP1_OUT="HA_YT_1to10_step1_PC"                      # output prefix for step1 with PCs
+DEST="/Data/regenie_results/array_1to10/"
+INSTANCE_TYPE="mem1_ssd1_v2_x16"
+
+run_step1=$(cat <<'EOF'
+set -euo pipefail
+
+G_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
+STEP1_OUT="HA_YT_1to10_step1_PC"
+
+echo "Working dir: $(pwd)"
+dx whoami || true
+dx pwd || true
+
+echo "Download inputs by file ID (overwrite)..."
+dx download "${BED_ID}"      -o "${G_PREFIX}.bed"         --overwrite
+dx download "${BIM_ID}"      -o "${G_PREFIX}.bim"         --overwrite
+dx download "${FAM_ID}"      -o "${G_PREFIX}.fam"         --overwrite
+dx download "${PHENO_ID}"    -o pheno.tsv                 --overwrite
+dx download "${COVAR_ID}"    -o covar.tsv                 --overwrite
+dx download "${KEEP_ID_FILE}" -o keep_samples.id          --overwrite
+dx download "${SNPLIST_FILE}" -o keep_snps.snplist        --overwrite
+
+echo "Sanity checks:"
+echo "pheno header:"; head -n 1 pheno.tsv
+echo "covar header:"; head -n 1 covar.tsv
+echo "n samples in keep file:"; wc -l keep_samples.id || true
+echo "n snps in snplist:"; wc -l keep_snps.snplist || true
+ls -lh ${G_PREFIX}.{bed,bim,fam}
+
+# ---- REGENIE Step 1 (binary trait) with PCs ----
+regenie --step 1 \
+  --lowmem \
+  --out ${STEP1_OUT} \
+  --bed ${G_PREFIX} \
+  --phenoFile pheno.tsv \
+  --covarFile covar.tsv \
+  --phenoCol ha_cc \
+  --covarCol sex \
+  --covarCol age \
+  --covarCol PC1 --covarCol PC2 --covarCol PC3 --covarCol PC4 --covarCol PC5 \
+  --covarCol PC6 --covarCol PC7 --covarCol PC8 --covarCol PC9 --covarCol PC10 \
+  --keep keep_samples.id \
+  --extract keep_snps.snplist \
+  --bsize 1000 \
+  --bt \
+  --loocv \
+  --gz \
+  --threads 16
+
+echo "Key outputs:"
+ls -lh ${STEP1_OUT}.log ${STEP1_OUT}_pred.list ${STEP1_OUT}_1.loco.gz
+EOF
+)
+
+run_step1="export BED_ID='${BED_ID}'; export BIM_ID='${BIM_ID}'; export FAM_ID='${FAM_ID}'; \
+export PHENO_ID='${PHENO_ID}'; export COVAR_ID='${COVAR_ID}'; \
+export KEEP_ID_FILE='${KEEP_ID_FILE}'; export SNPLIST_FILE='${SNPLIST_FILE}'; ${run_step1}"
+
+dx run swiss-army-knife \
+  -iin="${BED_ID}" \
+  -icmd="${run_step1}" \
+  --tag="PartD_regenie_step1_HA_1to10_withPCs" \
+  --instance-type "${INSTANCE_TYPE}" \
+  --destination="${DEST}" \
+  --brief --yes
