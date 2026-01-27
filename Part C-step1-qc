@@ -2,40 +2,53 @@
 set -euo pipefail
 
 # -----------------------
-# SETTINGS
+# INPUT FILE IDS (yours)
 # -----------------------
+BED_ID="file-J5qzk58JgX6p2BF63PV8b7Pb"
+BIM_ID="file-J5qzk5jJgX6f5KbZ2X1KPg3Z"
+FAM_ID="file-J5qzk5QJgX6kqkY2fqQy1xYZ"
+
 MERGED_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
-PROJECT_DATA_DIR="/Data"          # this is the *project folder path* for dx download
 OUT_PREFIX="HA_DS_step1_qc_pass"
 INSTANCE_TYPE="mem1_ssd1_v2_x16"
-
-# QC thresholds
-MAF="0.01"
-MAC="20"
-GENO="0.1"
-MIND="0.1"
-HWE="1e-15"
+DEST="/Data/qc_1to10/"
 
 run_qc=$(cat <<'EOF'
 set -euo pipefail
 
 MERGED_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
-PROJECT_DATA_DIR="/Data"
 OUT_PREFIX="HA_DS_step1_qc_pass"
 
 echo "Working dir: $(pwd)"
-dx whoami || true
-dx pwd || true
 
-echo "Downloading merged bed/bim/fam from project folder..."
-dx download "${PROJECT_DATA_DIR}/${MERGED_PREFIX}.bed" -o "${MERGED_PREFIX}.bed"
-dx download "${PROJECT_DATA_DIR}/${MERGED_PREFIX}.bim" -o "${MERGED_PREFIX}.bim"
-dx download "${PROJECT_DATA_DIR}/${MERGED_PREFIX}.fam" -o "${MERGED_PREFIX}.fam"
+echo "Mounted inputs (files only):"
+find /home/dnanexus/in -type f -maxdepth 6 -print || true
 
-echo "Local files:"
+# Copy inputs to expected filenames
+BED_SRC=$(find /home/dnanexus/in -type f -name "*.bed" | head -n 1 || true)
+BIM_SRC=$(find /home/dnanexus/in -type f -name "*.bim" | head -n 1 || true)
+FAM_SRC=$(find /home/dnanexus/in -type f -name "*.fam" | head -n 1 || true)
+
+if [ -z "$BED_SRC" ] || [ -z "$BIM_SRC" ] || [ -z "$FAM_SRC" ]; then
+  echo "ERROR: Could not locate .bed/.bim/.fam among mounted inputs" >&2
+  echo "Debug tree (depth 10):"
+  find /home/dnanexus/in -maxdepth 10 -print || true
+  exit 1
+fi
+
+echo "Using sources:"
+echo "  BED: $BED_SRC"
+echo "  BIM: $BIM_SRC"
+echo "  FAM: $FAM_SRC"
+
+cp "$BED_SRC" "${MERGED_PREFIX}.bed"
+cp "$BIM_SRC" "${MERGED_PREFIX}.bim"
+cp "$FAM_SRC" "${MERGED_PREFIX}.fam"
+
+echo "Local merged trio:"
 ls -lh ${MERGED_PREFIX}.{bed,bim,fam}
 
-echo "Running PLINK2 QC filter (write snplist + samples)..."
+echo "Running PLINK2 QC filter -> write snplist + samples"
 plink2 \
   --bfile ${MERGED_PREFIX} \
   --autosome \
@@ -59,9 +72,12 @@ EOF
 )
 
 dx run swiss-army-knife \
+  -iin="${BED_ID}" \
+  -iin="${BIM_ID}" \
+  -iin="${FAM_ID}" \
   -icmd="${run_qc}" \
   --tag="PartC_step1_qc_filter" \
   --instance-type "${INSTANCE_TYPE}" \
-  --destination="/Data/qc_1to10/" \
+  --destination="${DEST}" \
   --brief --yes
 
