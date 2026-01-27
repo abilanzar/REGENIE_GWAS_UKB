@@ -98,7 +98,7 @@ print("Saved locally:", out_path_local)
 !dx ls "/Data"
 
 
-
+# Downsample to 1:10
 import pandas as pd
 
 df = pd.read_csv("/home/dnanexus/HA_YT.phen.tsv", sep="\t")
@@ -114,4 +114,42 @@ df_ds.to_csv("/home/dnanexus/HA_YT_1to10.phen.tsv", sep="\t", index=False)
 !dx upload "/home/dnanexus/HA_YT_1to10.phen.tsv" --destination "/Data/HA_YT_1to10.phen.tsv" --brief
 !dx find data --name "HA_YT_1to10.phen.tsv" --path "/" --brief
 !dx ls "/Data"
+
+# Downsample to 1:20
+import pandas as pd
+df = pd.read_csv("/home/dnanexus/HA_YT.phen.tsv", sep="\t")
+
+# Split cases / controls
+cases = df[df.ha_cc == 1]
+controls_all = df[df.ha_cc == 0]
+
+n_cases = len(cases)
+n_ctrl_target = 20 * n_cases
+
+print("Cases:", n_cases)
+print("Available controls:", len(controls_all))
+print("Target controls (1:20):", n_ctrl_target)
+
+# Safety check
+if len(controls_all) < n_ctrl_target:
+    raise ValueError("Not enough controls to sample 1:20")
+
+# Sample controls
+controls = controls_all.sample(
+    n=n_ctrl_target,
+    random_state=42
+)
+
+# Combine
+df_ds = pd.concat([cases, controls], axis=0)
+
+# Sanity check
+print(df_ds.ha_cc.value_counts())
+
+# Write out
+out_path = "/home/dnanexus/HA_YT_1to20.phen.tsv"
+df_ds.to_csv(out_path, sep="\t", index=False)
+
+print("Wrote:", out_path)
+
 
