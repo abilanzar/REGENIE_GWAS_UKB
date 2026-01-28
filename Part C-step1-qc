@@ -75,10 +75,10 @@ BED_ID="file-J5qzk58JgX6p2BF63PV8b7Pb"
 BIM_ID="file-J5qzk5jJgX6f5KbZ2X1KPg3Z"
 FAM_ID="file-J5qzk5QJgX6kqkY2fqQy1xYZ"
 
-MERGED_PREFIX="ukb22418_c1_22_v2_merged_HA_DS"
-OUT_PREFIX="HA_DS_step1_qc_pass"
+MERGED_PREFIX="ukb22418_c1_22_v2_merged_HA_1to20"
+OUT_PREFIX="HA_1to20_step1_qc_pass"
 INSTANCE_TYPE="mem1_ssd1_v2_x16"
-DEST="/Data/qc_1to10/"
+DEST="/Data/qc/"
 
 run_qc=$(cat <<'EOF'
 set -euo pipefail
