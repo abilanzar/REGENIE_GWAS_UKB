@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ---- REGENIE step2 output ----
+REGENIE_ID="file-J5vqZk0Jq0718Q29F8j9jv7J"   # HA_YT_1to20_step2_PC_ha_cc.regenie.gz
+
+OUT_PREFIX="HA_YT_1to20_FUMA"
+DEST="/Data/regenie_results/array_1to20/"
+INSTANCE_TYPE="mem1_ssd1_v2_x16"
+
+run_fuma=$(cat <<'EOF'
+set -euo pipefail
+
+echo "Working dir: $(pwd)"
+dx whoami || true
+dx pwd || true
+
+echo "Download REGENIE output..."
+dx download "${REGENIE_ID}" -o step2.regenie.gz --overwrite
+
+echo "Peek header:"
+zcat step2.regenie.gz | head -n 2
+
+# Convert to FUMA format:
+# FUMA common columns: SNP CHR BP A1 A2 P (optional: BETA SE N)
+# REGENIE columns typically include: CHROM GENPOS ID ALLELE0 ALLELE1 A1FREQ N TEST BETA SE CHISQ LOG10P EXTRA
+zcat step2.regenie.gz | awk -v OFS='\t' '
+NR==1{
+  for(i=1;i<=NF;i++) h[$i]=i
+  print "SNP","CHR","BP","A1","A2","P","BETA","SE","N"
+  next
+}
+{
+  snp  = $(h["ID"])
+  chr  = $(h["CHROM"])
+  bp   = $(h["GENPOS"])
+  a0   = $(h["ALLELE0"])
+  a1   = $(h["ALLELE1"])
+  beta = (("BETA" in h) ? $(h["BETA"]) : "NA")
+  se   = (("SE"   in h) ? $(h["SE"])   : "NA")
+  n    = (("N"    in h) ? $(h["N"])    : "NA")
+  log10p = $(h["LOG10P"])
+  # convert LOG10P -> P; handle NA
+  if (log10p=="NA" || log10p=="") { p="NA" } else { p = 10^(-log10p) }
+  print snp, chr, bp, a1, a0, p, beta, se, n
+}' | gzip -c > ${OUT_PREFIX}.tsv.gz
+
+echo "Wrote:"
+ls -lh ${OUT_PREFIX}.tsv.gz
+
+echo "First lines:"
+zcat ${OUT_PREFIX}.tsv.gz | head
+EOF
+)
+
+run_fuma="export REGENIE_ID='${REGENIE_ID}'; ${run_fuma}"
+
+dx run swiss-army-knife \
+  -iin="${REGENIE_ID}" \
+  -icmd="${run_fuma}" \
+  --tag="Make_FUMA_input_1to20" \
+  --instance-type "${INSTANCE_TYPE}" \
+  --destination="${DEST}" \
+  --brief --yes
