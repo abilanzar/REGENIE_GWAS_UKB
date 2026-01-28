@@ -65,49 +65,77 @@ dx run swiss-army-knife \
   --destination="${DEST}" \
   --brief --yes
 
-# -----------------------
-# 1 to 20 case:control
-# -----------------------
 #!/usr/bin/env bash
 set -euo pipefail
 
-BED_ID="file-J5qzk58JgX6p2BF63PV8b7Pb"
-BIM_ID="file-J5qzk5jJgX6f5KbZ2X1KPg3Z"
-FAM_ID="file-J5qzk5QJgX6kqkY2fqQy1xYZ"
+# -----------------------
+# Part C: 1 to 20 case:control QC
+# Output to: /Data/regenie_results/array_1to20/
+# -----------------------
 
-MERGED_PREFIX="ukb22418_c1_22_v2_merged_HA_1to20"
+# ---- 1to20 merged genotype trio from Part B (N=3780) ----
+BED_ID="file-J5vZk2QJF3XyvBJ8PqG3Bb28"
+BIM_ID="file-J5vZk2QJF3XQ3xGF6YqPyY18"
+FAM_ID="file-J5vZk2QJF3Xg7bypk6ZXJZG1"
+
+# ---- local names inside the job ----
+G_PREFIX="ukb22418_c1_22_v2_merged_HA_1to20"
 OUT_PREFIX="HA_1to20_step1_qc_pass"
+
 INSTANCE_TYPE="mem1_ssd1_v2_x16"
-DEST="/Data/qc/"
+DEST="/Data/regenie_results/array_1to20/"
 
 run_qc=$(cat <<'EOF'
 set -euo pipefail
+
+G_PREFIX="ukb22418_c1_22_v2_merged_HA_1to20"
+OUT_PREFIX="HA_1to20_step1_qc_pass"
 
 echo "Working dir: $(pwd)"
 dx whoami || true
 dx pwd || true
 
-echo "Downloading BED/BIM/FAM..."
-dx download "${BED_ID}" -o "ukb22418_c1_22_v2_merged_HA_DS.bed" --overwrite
-dx download "${BIM_ID}" -o "ukb22418_c1_22_v2_merged_HA_DS.bim" --overwrite
-dx download "${FAM_ID}" -o "ukb22418_c1_22_v2_merged_HA_DS.fam" --overwrite
+echo "Downloading BED/BIM/FAM (1to20 merged)..."
+dx download "${BED_ID}" -o "${G_PREFIX}.bed" --overwrite
+dx download "${BIM_ID}" -o "${G_PREFIX}.bim" --overwrite
+dx download "${FAM_ID}" -o "${G_PREFIX}.fam" --overwrite
 
-ls -lh ukb22418_c1_22_v2_merged_HA_DS.{bed,bim,fam}
+echo "Local trio:"
+ls -lh ${G_PREFIX}.{bed,bim,fam}
 
-plink2 --bfile ukb22418_c1_22_v2_merged_HA_DS \
-  --autosome --maf 0.05 --mac 20 --geno 0.1 --mind 0.1 --hwe 1e-6 \
-  --write-snplist --write-samples --no-id-header \
-  --out HA_DS_step1_qc_pass
+echo "Counts (sanity):"
+echo -n "N samples (FAM lines): "; wc -l ${G_PREFIX}.fam
+echo -n "N variants (BIM lines): "; wc -l ${G_PREFIX}.bim
 
-ls -lh HA_DS_step1_qc_pass.*
-wc -l HA_DS_step1_qc_pass.snplist || true
-wc -l HA_DS_step1_qc_pass.id || true
+echo "Running PLINK2 QC filter..."
+plink2 \
+  --bfile ${G_PREFIX} \
+  --autosome \
+  --maf 0.05 \
+  --mac 20 \
+  --geno 0.1 \
+  --mind 0.1 \
+  --hwe 1e-6 \
+  --write-snplist \
+  --write-samples \
+  --no-id-header \
+  --out ${OUT_PREFIX}
+
+echo "Outputs:"
+ls -lh ${OUT_PREFIX}.*
+echo "SNPs kept:"; wc -l ${OUT_PREFIX}.snplist || true
+echo "Samples kept:"; wc -l ${OUT_PREFIX}.id || true
 EOF
 )
 
 run_qc="export BED_ID='${BED_ID}'; export BIM_ID='${BIM_ID}'; export FAM_ID='${FAM_ID}'; ${run_qc}"
 
-dx run swiss-army-knife -iin="${BED_ID}" -icmd="${run_qc}" \
-  --tag="PartC_step1_qc_filter" --instance-type "${INSTANCE_TYPE}" \
-  --destination="${DEST}" --brief --yes
+dx run swiss-army-knife \
+  -iin="${BED_ID}" \
+  -icmd="${run_qc}" \
+  --tag="PartC_step1_qc_filter_1to20" \
+  --instance-type "${INSTANCE_TYPE}" \
+  --destination="${DEST}" \
+  --brief --yes
+
 
