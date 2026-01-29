@@ -35,11 +35,11 @@ echo "Running PLINK2 QC filter (write snplist + samples)..."
 plink2 \
   --bfile ${MERGED_PREFIX} \
   --autosome \
-  --maf 0.05 \
-  --mac 20 \
+  --maf 0.05 \ #
+  --mac 20 \ 
   --geno 0.1 \
   --mind 0.1 \
-  --hwe 1e-6 \
+  --hwe 1e-6 \ #
   --write-snplist \
   --write-samples \
   --no-id-header \
